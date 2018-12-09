@@ -1,0 +1,17 @@
+body {
+    background: url("images/blueblack.jpg") no-repeat center center fixed;
+    -webkit-background-size: cover;
+    -moz-background-size: cover;
+    -o-background-size: cover;
+    background-size: cover;
+}
+
+#chart {
+    position:fixed;
+    top: 20%;
+    left: 10%;
+    right: 10%;
+    height: 70%;
+    border: 1px solid #ccc;
+    background-color: #f3f3f3;
+}
