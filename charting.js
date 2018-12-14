@@ -1,7 +1,10 @@
 var apiKey = "PC55IMQVIAWCD1X9";
 var url = "https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=EUR&to_symbol=USD&interval=1min&apikey=" + apiKey;
+
 var finalData;
 var firstRun = true;
+var MAarr;
+var period;
 
 var dataDictionary = {
     "open": [],
@@ -53,7 +56,6 @@ var lastAddedDate;
 
 function ParseData(json) {
     ClearDictionary();
-    console.log(json);
     var keys = Object.keys(json);
     var data = json[keys[1]];
     var dates = Object.keys(data);
@@ -86,9 +88,12 @@ function ParseData(json) {
     }
 }
 
-var MAtraceInChart = false;
+
+
+var data = [];
+var layout;
 function CreateChart() {
-    var trace = {
+    var trace1 = {
         x: dataDictionary.date,
         close: dataDictionary.close,
         high: dataDictionary.high,
@@ -103,38 +108,14 @@ function CreateChart() {
         yaxis: 'y'
     };
 
-    var MovingAverageTrace;
-    var button = document.getElementById("button");
-    button.addEventListener("click", function(){
-        if(MAtraceInChart === true) {
-            MAtraceInChart = false;
-            Plotly.deleteTraces('chart', 2);
-        }
-        MAtraceInChart = true;
-        var input = document.getElementById('input');
-        var period = input.value;
+    data = [trace1];
 
-        var numberPrices = [];
-        for(var i = 0; i < dataDictionary.close.length; i++) {
-            numberPrices.push(parseFloat(dataDictionary.close[i]));
-        }
 
-        var averagedPrices = movingAverage(period, numberPrices);
-
-        MovingAverageTrace = {
-            x: dataDictionary.date,
-            y: averagedPrices,
-            type: 'scatter'
-        };
-    });
-
-    var data = [trace, MovingAverageTrace];
-
-    var layout = {
-        title: 'EURUSD 1MIN Chart',
+    layout = {
+        title: 'EURUSD Chart',
         font: {
             family: 'Lato',
-            size: 20,
+            size: 10,
         },
         dragmode: 'turntable',
         showlegend: false,
@@ -143,7 +124,7 @@ function CreateChart() {
             title: 'Date',
             titlefont: {
                 color: 'black',
-                size: 15
+                size: 20
             },
             type: 'date',
             rangeselector: {buttons: [
@@ -167,82 +148,111 @@ function CreateChart() {
                     },
                     {
                         count: 60,
-                        label: 'H1',
+                        label: '60m',
                         step: 'minute',
                         stepmode: 'backward'
                     },
                     {step: 'all'}
                 ]},
-            rangeslider: {range: [dataDictionary.date[0], dataDictionary.date[dataDictionary.date.length-50]]},
+            rangeslider: {range: [dataDictionary.date[dataDictionary.date.length], dataDictionary.date[0]]},
         },
         yaxis: {
             title: 'Price',
             titlefont: {
-                size: 15
+                size: 20
             },
         },
     };
 
-    Plotly.plot('chart', data, layout, {responsive: true});
+    Plotly.newPlot('chart', data, layout);
+}
+
+
+
+var trace2;
+var MAtraceInChart = false;
+var button = document.getElementById("button");
+button.addEventListener("click", function(){
+    var input = document.getElementById('input');
+    period = parseInt(input.value);
+    if(period <= 0){
+        alert("Period must be >= 0");
+        return;
+    }
+
+    if(MAtraceInChart === true) {
+        data.pop();
+    }
+    MAtraceInChart = true;
+
+    MAarr = MovingAverage(dataDictionary.close, period);
+    trace2 = {
+        x: dataDictionary.date,
+        y: MAarr,
+        mode: 'lines',
+        line: {
+            color: 'rgb(55, 128, 191)',
+            width: 3
+        }
+    };
+
+    data.push(trace2);
+    Plotly.newPlot('chart', data, layout);
+});
+
+
+function MovingAverage(array, period) {
+    for(var m = 0; m < array.length; m++){
+        array[m] = parseFloat(array[m]);
+    }
+
+    var MAarray = [];
+    for(var i = 0; i < array.length; i++) {
+        var sum = 0;
+        var len = 0;
+        for(var k = i; k < i+period; k++) {
+            sum += array[k];
+            len++;
+        }
+        var avg = sum/len;
+        MAarray.push(avg);
+    }
+    console.log(MAarray);
+    return MAarray;
 }
 
 function RefreshChart() {
-    console.log("refreshing");
-    var extendedTrace =  {
-        x: [[dataDictionary.date[dataDictionary.date.length-1]]],
-        close: [[dataDictionary.close[dataDictionary.close.length-1]]],
-        high: [[dataDictionary.high[dataDictionary.high.length-1]]],
-        low: [[dataDictionary.low[dataDictionary.low.length-1]]],
-        open: [[dataDictionary.open[dataDictionary.open.length-1]]]
-    };
-    Plotly.extendTraces('chart', extendedTrace, [0]);
+    MAarr = MovingAverage(dataDictionary.close, period);
+
+    Plotly.extendTraces('chart', {
+        x: [[dataDictionary.date[0]]],
+        close: [[dataDictionary.close[0]]],
+        high: [[dataDictionary.high[0]]],
+        low: [[dataDictionary.low[0]]],
+        open: [[dataDictionary.open[0]]],
+    }, [0]);
+    if(MAtraceInChart) {
+        Plotly.extendTraces('chart', {
+            x: [[dataDictionary.date[0]]],
+            y: [[MAarr[0]]],
+        }, [1]);
+    }
 
     Plotly.relayout('chart',{
         xaxis: {
             range: [dataDictionary.date[dataDictionary.date.length-50], dataDictionary.date[0]],
             rangeslider: {
-                visible: false
+                visible: true
             }
         }
     });
+
+    Plotly.newPlot('chart', data, layout);
 }
 
 
-var singleMA = function (position, period, priceArray) {
-    var sum = 0;
-    for(var i = priceArray.length - 1 - position; i >= priceArray.length - 1 - period - position; i--) {
-        if(i > 0) {
-            sum += priceArray[i];
-        }
-    }
-    return sum/period;
-};
-
-var movingAverage = function (period, priceArray) {
-    var MAarray = [];
-    if(period > priceArray.length-1) {
-        period = priceArray.length-1;
-    }
-
-    for(var k = 0; k < period; k++) {
-        MAarray.push(singleMA(k, period, priceArray));
-    }
-
-    return MAarray;
-};
-
-
-
 requestData(url);
-CreateChart();
 
-var interval = 13000;
-
-setInterval(function() {
-    // requestData(url);
-
-
-
-}, interval);
-
-
+setInterval(function (){
+    requestData(url);
+}, 60000);
